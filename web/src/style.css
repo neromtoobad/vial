@@ -253,3 +253,7 @@ input:focus, select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgb
 }
 .held .t span b { display: inline; font: 600 13px var(--sans); }
 .import { margin-left: 0; }
+.verdict.amber { background: linear-gradient(120deg, var(--gold-soft), #fffcf5 60%); border-color: #ead9b4; }
+.verdict.amber .eyebrow, .verdict.amber h1 { color: #8a6522; }
+.checks .a i { background: var(--gold-soft); color: #8a6522; }
+.warn.amber { background: var(--gold-soft); color: #8a6522; }

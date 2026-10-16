@@ -29,7 +29,10 @@ once it's handed over: whoever holds the copy holds your HIV status forever.
   `createdBy(REGULATOR)`, and shows the forger's record so the reader sees why it failed.
 - Accreditation is an entity whose **lifetime is the accreditation**. Lapsed or withdrawn means gone, and a lab
   accredited *after* issuing a result doesn't retro-validate it.
-- `readonly`: nobody (not the lab, not the patient, not Vial) can edit a result. AES-GCM also authenticates the ciphertext.
+- `readonly`: nobody (not the lab, not the patient, not Vial) can edit a result. A result without the flag never verifies
+  green, because its owner could have rewritten it after the lab signed. AES-GCM also authenticates the ciphertext.
+- Sandbox accreditation (the self-service button that lets anyone try the lab side) shows **amber**, never green. Only
+  labs the regulator accredited directly (the demo's Harbourside Diagnostics) verify green.
 - A network or rate-limit error is never shown as "revoked": only `NoEntityFoundError` means gone.
 
 ### Privacy (only the patient decides who reads it)
@@ -41,7 +44,7 @@ once it's handed over: whoever holds the copy holds your HIV status forever.
 - What stays visible: that a lab issued *a* result to a wallet address, and when. A patient can use a fresh wallet per result.
 
 ## Try every side
-1. **Lab desk** (`/lab`): get a 2-day sandbox accreditation from the sandbox regulator, pick a test, seal it, hand it
+1. **Lab desk** (`/lab`): get a 10-day sandbox accreditation from the sandbox regulator (verifiers show sandbox labs in amber), pick a test, seal it, hand it
    to this browser's patient wallet (or any address). Or skip accreditation and watch the verifier reject you.
 2. **My results** (`/me`): share (link + QR), keep 30 more days, revoke.
 3. **Verify** (`/verify`): paste a link.

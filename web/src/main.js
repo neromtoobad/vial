@@ -201,22 +201,30 @@ async function verifier(key, secret) {
       return
     }
     const { result: r, lab, report } = v, left = secondsLeft(r.expiresAt)
-    const ok = v.status === "verified"
-    const labName = lab?.attrs?.name, sandbox = lab?.attrs?.sandbox
+    const ok = v.status === "verified", sandbox = v.status === "sandbox", trusted = ok || sandbox
+    const tone = ok ? "good" : sandbox ? "amber" : "bad"
+    const labName = lab?.attrs?.name
     const forgedName = v.claims?.[0]?.attrs?.name
     const claimed = report?.lab
-    const head1 = ok ? `Genuine. Sealed by ${esc(labName)}.` : `Not from an accredited lab.`
+    const head1 = ok ? `Genuine. Sealed by ${esc(labName)}.`
+      : sandbox ? `Real signature, test accreditation.`
+      : v.status === "editable" ? `Signed by an accredited lab, but it could have been changed.`
+      : `Not from an accredited lab.`
     const sub = ok
-      ? `The signer is on the regulator's list${sandbox ? " (a sandbox accreditation, made for trying Vial)" : ""}, the record can't be edited, and the patient holds it.`
+      ? `The signer is on the regulator's list, the record can't be edited, and the patient holds it.`
+      : sandbox
+        ? `Sealed by <b>${esc(labName)}</b>, a lab accredited through Vial's self-service sandbox, which anyone can join to try the app. The signature and the seal are real; the accreditation proves nothing. Only regulator-accredited labs show green.`
+      : v.status === "editable"
+        ? `<b>${esc(labName)}</b> signed it without Arkiv's read-only flag, so whoever holds it could have rewritten the contents after the lab signed. Vial doesn't accept it as proof.`
       : forgedName || claimed
         ? `It claims to come from <b>${esc(forgedName || claimed)}</b>. ${forgedName ? `That lab even wrote its own accreditation record on Arkiv, but the regulator didn't sign it, so it counts for nothing.` : `No accreditation signed by the regulator exists for its signer.`}`
         : `Its signer has no accreditation signed by the regulator.`
-    const row = (good, title, ev) => `<li class="${good ? "y" : "n"}"><i>${good ? "✓" : "✕"}</i><div><b>${title}</b><span>${ev}</span></div></li>`
+    const row = (good, title, ev) => `<li class="${good === "amber" ? "a" : good ? "y" : "n"}"><i>${good === "amber" ? "!" : good ? "✓" : "✕"}</i><div><b>${title}</b><span>${ev}</span></div></li>`
     app.innerHTML = `
-    <section class="verdict ${ok ? "good" : "bad"} ${flash}">
-      <div class="v-art"><img src="/art/${ok ? "seal" : "fake"}.webp" alt="" /></div>
+    <section class="verdict ${tone} ${flash}">
+      <div class="v-art"><img src="/art/${ok ? "seal" : sandbox ? "lab" : "fake"}.webp" alt="" /></div>
       <div>
-        <p class="eyebrow">${ok ? "Verified on Arkiv" : "Verification failed"} · live</p>
+        <p class="eyebrow">${ok ? "Verified on Arkiv" : sandbox ? "Sandbox accreditation" : "Verification failed"} · live</p>
         <h1 class="h">${head1}</h1>
         <p class="lede">${sub}</p>
         <p class="mono small">checked at block ${at} · this page updates by itself if the patient revokes it</p>
@@ -227,8 +235,8 @@ async function verifier(key, secret) {
         <h3 class="label">What Vial checked</h3>
         <ul class="checks">
           ${row(true, "It exists on Arkiv", `Result <a href="${EXPLORER}/entity/${r.key}" target="_blank" rel="noopener" class="mono">${short(r.key)}</a> expires in <b data-left="${r.expiresAt}">${life(left)}</b> (${until(left)}), on the patient's terms.`)}
-          ${row(ok, ok ? "Signed by an accredited lab" : "Signed by a lab nobody accredited", ok
-            ? `Signer <span class="mono">${short(r.creator)}</span> holds accreditation <a href="${EXPLORER}/entity/${lab.key}" target="_blank" rel="noopener" class="mono">${short(lab.key)}</a>, written by the regulator <span class="mono">${short(REGULATOR)}</span>, valid ${life(secondsLeft(lab.expiresAt))} more.`
+          ${row(lab ? (lab.attrs.sandbox === true ? "amber" : true) : false, lab ? (lab.attrs.sandbox === true ? "Signed by a sandbox-accredited lab" : "Signed by an accredited lab") : "Signed by a lab nobody accredited", lab
+            ? `${lab.attrs.sandbox === true ? "Self-service test accreditation. " : ""}Signer <span class="mono">${short(r.creator)}</span> holds accreditation <a href="${EXPLORER}/entity/${lab.key}" target="_blank" rel="noopener" class="mono">${short(lab.key)}</a>, written by the regulator <span class="mono">${short(REGULATOR)}</span>, valid ${life(secondsLeft(lab.expiresAt))} more.`
             : `Signer <span class="mono">${short(r.creator)}</span>. ${v.late ? "Its accreditation is newer than this result, so it doesn't count." : v.claims?.length ? `It has a lab record <a href="${EXPLORER}/entity/${v.claims[0].key}" target="_blank" rel="noopener" class="mono">${short(v.claims[0].key)}</a>, but that record was written by <span class="mono">${short(v.claims[0].creator)}</span>, not the regulator.` : "No lab record from the regulator names it."}`)}
           ${row(v.readonly, v.readonly ? "Nobody can edit it" : "It could have been edited", v.readonly ? "Created with Arkiv's <code>readonly</code> flag: not the lab, not the patient, not us can change a byte of it. They can only let it go." : "Created without the read-only flag.")}
           ${row(v.handedOver, v.handedOver ? "The patient holds it" : "The lab still holds it", v.handedOver ? `Owner <span class="mono">${short(r.owner)}</span>, handed over in the same transaction that created it. Only the owner can extend or revoke it.` : "Ownership never moved to a patient.")}
@@ -238,7 +246,7 @@ async function verifier(key, secret) {
           <pre>${esc(JSON.stringify({ key: r.key, $creator: r.creator, $owner: r.owner, $expiresAt: String(r.expiresAt), flags: { readonly: !!r.flags?.readonly }, attributes: r.attrs, payload: { ...r.data, ct: String(r.data.ct || "").slice(0, 64) + "…" } }, null, 2))}</pre>
         </details>
       </div>
-      <div>${report ? `${ok ? "" : `<div class="warn">The contents below are whatever the forger typed. They prove nothing.</div>`}${reportCard(report, { issued: `block ${r.createdAt}`, void: !ok })}` : `<div class="sealed-card"><img src="/art/phone.webp" alt="" /><b>Sealed</b><p>Only someone with the full link can read this result. What the verifier can still prove is who signed it and who holds it.</p></div>`}</div>
+      <div>${report ? `${ok ? "" : sandbox ? `<div class="warn amber">A sandbox lab wrote this. Real seal, test accreditation: don't rely on it.</div>` : v.status === "editable" ? `<div class="warn">These contents may have been changed after the lab signed them.</div>` : `<div class="warn">The contents below are whatever the forger typed. They prove nothing.</div>`}${reportCard(report, { issued: `block ${r.createdAt}`, void: !trusted })}` : `<div class="sealed-card"><img src="/art/phone.webp" alt="" /><b>Sealed</b><p>Only someone with the full link can read this result. What the verifier can still prove is who signed it and who holds it.</p></div>`}</div>
     </section>`
   }
   await check()
@@ -344,9 +352,9 @@ async function labDesk() {
   const paintAcc = () => {
     $("accr").innerHTML = acc
       ? `<img src="/art/seal.webp" alt="" class="ic" /><p class="eyebrow ok">Accredited</p><h3>${esc(acc.attrs.name)}</h3>
-         <p class="small">The regulator <span class="mono">${short(REGULATOR)}</span> wrote <a href="${EXPLORER}/entity/${acc.key}" target="_blank" rel="noopener" class="mono">${short(acc.key)}</a> for your key. It lasts <b data-left="${acc.expiresAt}">${life(secondsLeft(acc.expiresAt))}</b>. When it runs out, verifiers stop trusting results you issue from then on.</p>`
+         <p class="small">The regulator <span class="mono">${short(REGULATOR)}</span> wrote <a href="${EXPLORER}/entity/${acc.key}" target="_blank" rel="noopener" class="mono">${short(acc.key)}</a> for your key. It lasts <b data-left="${acc.expiresAt}">${life(secondsLeft(acc.expiresAt))}</b>. When it runs out, verifiers stop trusting your results.${acc.attrs.sandbox === true ? " It's a sandbox accreditation, so verifiers show your results in amber, not green." : ""}</p>`
       : `<img src="/art/lab.webp" alt="" class="ic" /><p class="eyebrow">Step 1 · Accreditation</p><h3>Get on the regulator's list</h3>
-         <p class="small">Real labs are accredited by a regulator. Here a sandbox regulator signs a record for your key that lasts 2 days, so you can try Vial.</p>
+         <p class="small">Real labs are accredited by a regulator. Here a sandbox regulator signs a record for your key that lasts 10 days, so you can try Vial. Verifiers show sandbox results in amber, because anyone can get this accreditation.</p>
          <form id="accf" class="stack"><input id="ln" maxlength="40" placeholder="Lab name" value="${esc(prof.name || "")}" required /><input id="lc" maxlength="30" placeholder="City" value="${esc(prof.city || "")}" />
          <button class="btn primary">Request sandbox accreditation</button></form>
          <p class="fine">Or skip this and issue anyway, like a forger would. Then watch the verifier reject it.</p>`

@@ -15,7 +15,7 @@ export const REGULATOR = "0x6BE641Ca56A1427f37f431e10fde993C4AbAb0B1"
 export const RPC_URL = "https://rpc.tiramisu.db-chain.testnet.arkiv.network"
 export const EXPLORER = "https://tiramisu.explorer.arkiv.network"
 export const ACCREDITATION_DAYS = 365
-export const SANDBOX_ACCREDITATION_DAYS = 2
+export const SANDBOX_ACCREDITATION_DAYS = 10
 export const RESULT_DAYS = { week: 7, month: 30, quarter: 90, year: 365 }
 
 // ---------- clients ----------
@@ -140,11 +140,15 @@ export async function verify(client, key, secret) {
   const claims = lab ? [] : await collect(client.select(FIELDS).where(eq("app", APP), eq("net", NET), eq("kind", "lab"), eq("wallet", addr(e.creator))))
   let report = null, sealed = false
   if (secret) { try { report = await unseal(e.data, secret) } catch { sealed = true } } else sealed = true
+  const readonly = !!e.flags?.readonly
+  // Green needs both: an accredited signer AND a record nobody can edit. Without readonly the patient (its owner)
+  // could rewrite the contents after the lab signed it. A sandbox accreditation is real but self-service, so it's amber.
+  const status = !lab ? "unaccredited" : !readonly ? "editable" : lab.attrs.sandbox === true ? "sandbox" : "verified"
   return {
-    status: lab ? "verified" : "unaccredited",
+    status,
     result: e, lab, late, claims: claims.filter((c) => !same(c.creator, REGULATOR)), report, sealed,
     handedOver: !same(e.owner, e.creator),
-    readonly: !!e.flags?.readonly,
+    readonly,
   }
 }
 export const resultLink = (origin, key, secret) => `${origin}/r/${key}#k=${secret}`

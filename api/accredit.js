@@ -1,4 +1,4 @@
-// POST /api/accredit { address, name, city } -> the sandbox regulator accredits a visitor's lab key for 2 days.
+// POST /api/accredit { address, name, city } -> the sandbox regulator accredits a visitor's lab key for 10 days. Verifiers show sandbox labs in amber, never green.
 // The only code that holds the regulator key. It writes exactly one kind of entity: a `lab` record whose lifetime is
 // the accreditation. Real labs would go through a real regulator; this endpoint exists so anyone can try issuing.
 import { privateKeyToAccount } from "viem/accounts"

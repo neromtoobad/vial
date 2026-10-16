@@ -20,7 +20,7 @@ Written by the regulator (sandbox: by `api/accredit.js`; demo lab: by `scripts/s
 |---|---|
 | attributes | `app`, `net`, `kind = "lab"`, `wallet` (addr: the lab's signing key), `name` (str), `sandbox` (bool) |
 | payload | JSON `{ name, city }` |
-| expiry | **the accreditation itself**: 365 days, sandbox 2 days. Expired or deleted = no longer accredited. |
+| expiry | **the accreditation itself**: 365 days, sandbox 10 days. Expired or deleted = no longer accredited. |
 | `$creator` | must equal `REGULATOR`, or the record is ignored |
 
 Anyone can write an entity that looks exactly like this (the demo forger "QuickCert Lab" did). Verifiers filter with
@@ -67,9 +67,12 @@ Queries:
 1. `getEntity(key)`. `NoEntityFoundError` → **gone** (revoked or expired). Any other error is surfaced as an error and is
    never shown as "revoked".
 2. The result's `$creator` has a live `lab` record created by `REGULATOR`, and that record is **older than the result**
-   (accreditation after the fact doesn't count) → **verified**, else **unaccredited**.
-3. `readonly` flag is set; `$owner ≠ $creator` (handed to a patient).
-4. The key in the link decrypts the payload (AES-GCM authenticates it, so any tampering would also fail here).
+   (accreditation after the fact doesn't count). If not → **unaccredited** (red).
+3. The `readonly` flag is set. If not → **editable** (red): its owner could have rewritten the payload after the lab signed it.
+4. The lab record's `sandbox` attribute (written by the regulator, so trustworthy) is `true` → **sandbox** (amber): a real
+   signature, but self-service accreditation. Otherwise → **verified** (green).
+5. `$owner ≠ $creator` (handed to a patient) is shown as a check but doesn't change the verdict.
+6. The key in the link decrypts the payload (AES-GCM authenticates it, so any tampering would also fail here).
 
 The open verifier page subscribes to `watchEntityEvents`: `EntityDeleted` on the result flips it to "revoked" live,
 `ExpiryExtended` updates the expiry, and `EntityDeleted` on the lab record re-runs the check.
@@ -78,12 +81,12 @@ The open verifier page subscribes to `watchEntityEvents`: `EntityDeleted` on the
 
 | Entity | Lifetime | Who can change it |
 |---|---|---|
-| `lab` | 365 d (sandbox 2 d) | regulator (extend to renew, delete to withdraw) |
+| `lab` | 365 d (sandbox 10 d) | regulator (extend to renew, delete to withdraw) |
 | `result` | 7–365 d at issue | patient only (extend, delete). Not the lab, not Vial. |
 
 ## Server code
 
-- `api/accredit.js` holds the sandbox regulator key; writes `lab` records, 3 per hour per IP, 2-day lifetime.
+- `api/accredit.js` holds the sandbox regulator key; writes `lab` records, 3 per hour per IP, 10-day lifetime, `sandbox = true`.
 - `api/drip.js` sends 0.01 test GLM to a new browser key so it can sign its own writes.
 - `api/rpc.js` is a read-only relay (allow-listed read methods), used only when a visitor's anonymous Arkiv budget is exhausted.
 
