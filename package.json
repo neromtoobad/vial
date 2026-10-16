@@ -1,0 +1,20 @@
+{
+  "name": "vial",
+  "version": "1.0.0",
+  "description": "Lab results anyone can verify and only the patient can open. Built on Arkiv.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@arkiv-network/sdk": "0.8.1",
+    "qrcode": "^1.5.4",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.4",
+    "vite": "^8.3.4"
+  }
+}
